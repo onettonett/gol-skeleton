@@ -3,9 +3,9 @@ package main
 import (
 	"flag"
 	"fmt"
-	"runtime"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 
 	"uk.ac.bris.cs/gameoflife/gol"
@@ -56,8 +56,9 @@ func main() {
 	keyPresses := make(chan rune, 10)
 	events := make(chan gol.Event, 1000)
 
+	// not that the "keyPresses" channel is shared between 2 goroutines
+	// events channel is also shared
 	go sigterm(keyPresses)
-
 	go gol.Run(params, events, keyPresses)
 	if !(*headless) {
 		sdl.Run(params, events, keyPresses)

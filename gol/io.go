@@ -15,9 +15,8 @@ import (
 // The functions io.readPgmImage and startIo are particularly important in this step.
 
 type ioChannels struct {
-	command <-chan ioCommand
-	idle    chan<- bool
-
+	command  <-chan ioCommand
+	idle     chan<- bool
 	filename <-chan string
 	output   <-chan uint8
 	input    chan<- uint8
@@ -123,7 +122,8 @@ func (io *ioState) readPgmImage() {
 	}
 
 	image := []byte(fields[4])
-
+	// you give the command that you want to read an image, give it the filename
+	// you then receive the image byte by byte by the IO goroutines
 	for _, b := range image {
 		io.channels.input <- b
 	}
@@ -133,6 +133,7 @@ func (io *ioState) readPgmImage() {
 
 // startIo should be the entrypoint of the io goroutine.
 func startIo(p Params, c ioChannels) {
+	// from gol.go: go startIo(p, ioChannels)
 	io := ioState{
 		params:   p,
 		channels: c,
@@ -145,8 +146,10 @@ func startIo(p Params, c ioChannels) {
 			io.readPgmImage()
 		case ioOutput:
 			io.writePgmImage()
+			// checkIdle ensures you don't close the program before writePGM has finished writing
 		case ioCheckIdle:
 			io.channels.idle <- true
 		}
+
 	}
 }
