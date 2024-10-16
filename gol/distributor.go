@@ -20,12 +20,13 @@ func distributor(p Params, c distributorChannels) {
 	// TODO: Create a 2D slice to store the world.
 	H := p.ImageHeight
 	W := p.ImageWidth
+
 	turn := 0
-	toReturn := make([][]byte, H) // create a slice with 16 rows
+	world := make([][]uint8, H) // create a slice with 16 rows
 	for i := 0; i < H; i++ {
-		toReturn[i] = make([]byte, W) // initialise each row with 16 columns
+		world[i] = make([]uint8, W) // initialise each row with 16 columns
 	}
-	c.ioFilename
+
 	c.events <- StateChange{turn, Executing}
 	// TODO: Execute all turns of the Game of Life.
 	for y := 0; y < H; y++ {
@@ -76,7 +77,7 @@ func distributor(p Params, c distributorChannels) {
 	}
 
 	// TODO: Report the final state using FinalTurnCompleteEvent.
-	c.events <- FinalTurnComplete{}
+	c.events <- FinalTurnComplete{CompletedTurns: p.Turns, Alive: x}
 	// send an event down an events channel
 	// must implement the events channel, FinalTurnComplete is an event so must implement the event interface
 
