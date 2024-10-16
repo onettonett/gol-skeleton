@@ -6,7 +6,6 @@ import (
 	"runtime"
 	"testing"
 	"time"
-
 	"uk.ac.bris.cs/gameoflife/sdl"
 	"uk.ac.bris.cs/gameoflife/util"
 )

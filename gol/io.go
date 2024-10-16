@@ -8,6 +8,12 @@ import (
 	"uk.ac.bris.cs/gameoflife/util"
 )
 
+// you can't call methods directly on the IO goroutine
+// to use the IO, you'll need to use channel communication
+// To read the initial PGM image, you will need the command, filename and input channels.
+// Look at the file gol/io.go for their implementation details.
+// The functions io.readPgmImage and startIo are particularly important in this step.
+
 type ioChannels struct {
 	command <-chan ioCommand
 	idle    chan<- bool
@@ -28,9 +34,10 @@ type ioCommand uint8
 
 // This is a way of creating enums in Go.
 // It will evaluate to:
-//		ioOutput 	= 0
-//		ioInput 	= 1
-//		ioCheckIdle = 2
+//
+//	ioOutput 	= 0
+//	ioInput 	= 1
+//	ioCheckIdle = 2
 const (
 	ioOutput ioCommand = iota
 	ioInput
