@@ -123,7 +123,7 @@ func (io *ioState) readPgmImage() {
 
 	image := []byte(fields[4])
 	// you give the command that you want to read an image, give it the filename
-	// you then receive the image byte by byte by the IO goroutines
+	// you then receive the image byte-by-byte by the IO goroutines
 	for _, b := range image {
 		io.channels.input <- b
 	}

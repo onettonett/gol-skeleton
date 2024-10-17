@@ -2,7 +2,6 @@ package gol
 
 import (
 	"fmt"
-
 	"uk.ac.bris.cs/gameoflife/util"
 )
 
