@@ -26,6 +26,7 @@ func distributor(p Params, c distributorChannels) {
 	for i := 0; i < H; i++ {
 		world[i] = make([]uint8, W) // initialise each row with 16 columns
 	}
+	ioInput <-
 
 	c.events <- StateChange{turn, Executing}
 	// TODO: Execute all turns of the Game of Life.
