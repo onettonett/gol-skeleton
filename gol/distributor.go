@@ -49,6 +49,7 @@ func distributor(p Params, c distributorChannels) {
 
 	c.events <- StateChange{turn, Executing}
 	// TODO: Execute all turns of the Game of Life.
+	p.Threads
 	for i := 0; i < p.Turns; i++ {
 		world = nextState(world, p, c)
 	}

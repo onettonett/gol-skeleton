@@ -36,5 +36,4 @@ func Run(p Params, events chan<- Event, keyPresses <-chan rune) {
 		ioInput:    ioInput,
 	}
 	distributor(p, distributorChannels)
-
 }
