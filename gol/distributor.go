@@ -1,5 +1,9 @@
 package gol
 
+import (
+	"fmt"
+)
+
 type distributorChannels struct {
 	events     chan<- Event
 	ioCommand  chan<- ioCommand
@@ -17,6 +21,10 @@ type distributorChannels struct {
 // distributor divides the work between workers and interacts with other goroutines.
 func distributor(p Params, c distributorChannels) {
 
+	// first thing is to get the image
+	filename := fmt.Sprintf("%dx%d", p.ImageHeight, p.ImageWidth)
+	c.ioFilename <- filename
+
 	// TODO: Create a 2D slice to store the world.
 	H := p.ImageHeight
 	W := p.ImageWidth
@@ -26,7 +34,12 @@ func distributor(p Params, c distributorChannels) {
 	for i := 0; i < H; i++ {
 		world[i] = make([]uint8, W) // initialise each row with 16 columns
 	}
-	ioInput <-
+	// fill in the 2d slice
+	for y := 0; y < H; y++ {
+		for x := 0; x < W; x++ {
+			world[y][x] = <-c.ioInput
+		}
+	}
 
 	c.events <- StateChange{turn, Executing}
 	// TODO: Execute all turns of the Game of Life.
@@ -90,4 +103,72 @@ func distributor(p Params, c distributorChannels) {
 
 	// Close the channel to stop the SDL goroutine gracefully. Removing may cause deadlock.
 	close(c.events)
+}
+
+func nextState(world [][]uint8, p Params) [][]uint8 {
+
+	H := p.ImageHeight
+	W := p.ImageHeight
+
+	// make toReturn 2d slice
+	toReturn := make([][]uint8, H) // create a slice with 16 rows
+	for i := 0; i < H; i++ {
+		toReturn[i] = make([]uint8, W) // initialise each row with 16 columns
+	}
+	// fill in the 2d slice
+	for y := 0; y < H; y++ {
+		for x := 0; x < W; x++ {
+			toReturn[y][x] = <-c.ioInput
+		}
+	}
+
+	H := p.ImageHeight
+	W := p.ImageWidth
+	for y := 0; y < H; y++ {
+		for x := 0; x < W; x++ {
+			sum := 0
+			if world[y%H][(x-1+W)%W] != 0 {
+				sum += 1
+			}
+			if world[y%H][(x+1)%W] != 0 {
+				sum += 1
+			}
+			if world[(y+1)%H][x%W] != 0 {
+				sum += 1
+			}
+			if world[(y+1)%H][(x+1)%W] != 0 {
+				sum += 1
+			}
+			if world[(y+1)%H][(x-1+W)%W] != 0 {
+				sum += 1
+			}
+			if world[(y-1+H)%H][x%W] != 0 {
+				sum += 1
+			}
+			if world[(y-1+H)%H][(x+1)%W] != 0 {
+				sum += 1
+			}
+			if world[(y-1+H)%H][(x-1+W)%W] != 0 {
+				sum += 1
+			}
+
+			if world[y][x] == 255 {
+				// the cell was previously alive
+				if sum < 2 || sum > 3 {
+					toReturn[y][x] = 0
+				} else if sum == 2 || sum == 3 {
+					// keep the cell alive
+					toReturn[y][x] = 255
+				}
+			} else if world[y][x] == 0 {
+				// the cell was previously dead
+				if sum == 3 {
+					toReturn[y][x] = 255
+				} else {
+					toReturn[y][x] = 0
+				}
+			}
+		}
+	}
+	return toReturn
 }
