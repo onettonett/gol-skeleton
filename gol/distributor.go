@@ -138,6 +138,27 @@ func nextState(world [][]uint8, p Params, c distributorChannels) [][]uint8 {
 	return toReturn
 }
 
+// merge - nextState
+func parallelNextState(slice []uint8, p Params, c distributorChannels, max int) [][]uint8 {
+	if len(slice) > 1 {
+		if len(slice) <= max {
+			nextState(slice)
+		} else {
+			middle := len(slice) / 2
+			done := make(chan bool)
+
+			go func() {
+				parallelNextState(slice[:middle], p, c, max)
+				done <- true
+			}()
+
+			parallelNextState(slice[middle:], p, c, max)
+			<-done
+			nextState(slice, p, c, middle)
+		}
+	}
+}
+
 func calculateAliveCells(world [][]byte) []util.Cell {
 	alives := make([]util.Cell, 0)
 	for y := 0; y < 16; y++ {
