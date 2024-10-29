@@ -6,11 +6,12 @@ import (
 	"net"
 	"net/rpc"
 	"time"
+	"uk.ac.bris.cs/gameoflife/gol"
 	"uk.ac.bris.cs/gameoflife/stubs"
 )
 
 // Secret method that we can't let clients see
-func nextState(world [][]uint8, p Params, c distributorChannels) [][]uint8 {
+func nextState(world [][]uint8, p gol.Params, c gol.DistributorChannels) [][]uint8 {
 
 	H := p.ImageHeight
 	W := p.ImageHeight
@@ -80,6 +81,7 @@ type SecretStringOperations struct{}
 
 func (s *SecretStringOperations) Reverse(req stubs.Request, res *stubs.Response) (err error) {
 	res.Message = nextState(req.Message, 10)
+	// func nextState(world [][]uint8, p gol.Params, c gol.DistributorChannels) [][]uint8
 	return
 }
 
