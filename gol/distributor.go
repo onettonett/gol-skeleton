@@ -5,7 +5,7 @@ import (
 	"uk.ac.bris.cs/gameoflife/util"
 )
 
-type distributorChannels struct {
+type DistributorChannels struct {
 	events     chan<- Event
 	ioCommand  chan<- ioCommand
 	ioIdle     <-chan bool
@@ -20,7 +20,7 @@ type distributorChannels struct {
 // finally, it sends the alive cells down this final turn complete event that's used by the testing suite
 
 // distributor divides the work between workers and interacts with other goroutines.
-func distributor(p Params, c distributorChannels) {
+func distributor(p Params, c DistributorChannels) {
 
 	// first thing is to get the image
 
@@ -71,7 +71,7 @@ func distributor(p Params, c distributorChannels) {
 	close(c.events)
 }
 
-func nextState(world [][]uint8, p Params, c distributorChannels) [][]uint8 {
+func nextState(world [][]uint8, p Params, c DistributorChannels) [][]uint8 {
 
 	H := p.ImageHeight
 	W := p.ImageHeight
