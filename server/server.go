@@ -8,6 +8,7 @@ import (
 	"time"
 	"uk.ac.bris.cs/gameoflife/gol"
 	"uk.ac.bris.cs/gameoflife/stubs"
+	"uk.ac.bris.cs/gameoflife/util"
 )
 
 // distributor.go acts as the client
@@ -82,18 +83,32 @@ func nextState(world [][]uint8, p gol.Params, c gol.DistributorChannels) [][]uin
 	return toReturn
 }
 
-func doAllTurns(world [][]uint8, p gol.Params, c gol.DistributorChannels) {
+func doAllTurns(world [][]uint8, p gol.Params, c gol.DistributorChannels) [][]uint8 {
 	for i := 0; i < p.Turns; i++ {
 		world = nextState(world, p, c)
 	}
+	return world
 }
 
 type SecretStringOperations struct{}
 
 // this is like the Reverse method in SecretStrings
 func (s *SecretStringOperations) Update(req stubs.Request, res *stubs.Response) (err error) {
-	res.UpdatedWorld = nextState(req.World, req.P, req.C)
+	res.UpdatedWorld = doAllTurns(req.World, req.P, req.C)
 	// func nextState(world [][]uint8, p gol.Params, c gol.DistributorChannels) [][]uint8
+}
+
+func calculateAliveCells(world [][]byte) []util.Cell {
+	alives := make([]util.Cell, 0)
+	for y := 0; y < 16; y++ {
+		for x := 0; x < 16; x++ {
+			if world[y][x] == 255 {
+				newCell := util.Cell{x, y}
+				alives = append(alives, newCell)
+			}
+		}
+	}
+	return alives
 }
 
 func main() {

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/rpc"
 	"uk.ac.bris.cs/gameoflife/stubs"
-	"uk.ac.bris.cs/gameoflife/util"
 )
 
 type DistributorChannels struct {
@@ -57,9 +56,6 @@ func distributor(p Params, c DistributorChannels) {
 	// Client sends the world as an RPC call to the server
 	// Server sends back the world after the turns have been done
 	// TODO: Execute all turns of the Game of Life.
-	for i := 0; i < p.Turns; i++ {
-		world = nextState(world, p, c)
-	}
 
 	// TODO: Report the final state using FinalTurnCompleteEvent.
 	alives := calculateAliveCells(world)
@@ -77,19 +73,6 @@ func distributor(p Params, c DistributorChannels) {
 
 	// Close the channel to stop the SDL goroutine gracefully. Removing may cause deadlock.
 	close(c.events)
-}
-
-func calculateAliveCells(world [][]byte) []util.Cell {
-	alives := make([]util.Cell, 0)
-	for y := 0; y < 16; y++ {
-		for x := 0; x < 16; x++ {
-			if world[y][x] == 255 {
-				newCell := util.Cell{x, y}
-				alives = append(alives, newCell)
-			}
-		}
-	}
-	return alives
 }
 
 func main() {
