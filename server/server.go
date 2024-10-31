@@ -24,7 +24,7 @@ func nextState(world [][]uint8, p gol.Params, c gol.DistributorChannels) [][]uin
 	// fill in the 2d slice
 	for y := 0; y < H; y++ {
 		for x := 0; x < W; x++ {
-			toReturn[y][x] = <-c.ioInput
+			toReturn[y][x] = <-c.IoInput
 		}
 	}
 
@@ -80,7 +80,7 @@ func nextState(world [][]uint8, p gol.Params, c gol.DistributorChannels) [][]uin
 type SecretStringOperations struct{}
 
 func (s *SecretStringOperations) Reverse(req stubs.Request, res *stubs.Response) (err error) {
-	res.Message = nextState(req.Message, 10)
+	res.UpdatedWorld = nextState(req.World, req.P, req.C)
 	// func nextState(world [][]uint8, p gol.Params, c gol.DistributorChannels) [][]uint8
 	return
 }

@@ -11,7 +11,7 @@ type DistributorChannels struct {
 	ioIdle     <-chan bool
 	ioFilename chan<- string
 	ioOutput   chan<- uint8
-	ioInput    <-chan uint8
+	IoInput    <-chan uint8
 }
 
 // distributor constructs a filename based on parameters
@@ -41,7 +41,7 @@ func distributor(p Params, c DistributorChannels) {
 	// fill in the 2d slice
 	for y := 0; y < H; y++ {
 		for x := 0; x < W; x++ {
-			world[y][x] = <-c.ioInput
+			world[y][x] = <-c.IoInput
 		}
 	}
 	c.ioCommand <- ioCheckIdle
@@ -84,7 +84,7 @@ func nextState(world [][]uint8, p Params, c DistributorChannels) [][]uint8 {
 	// fill in the 2d slice
 	for y := 0; y < H; y++ {
 		for x := 0; x < W; x++ {
-			toReturn[y][x] = <-c.ioInput
+			toReturn[y][x] = <-c.IoInput
 		}
 	}
 

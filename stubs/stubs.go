@@ -6,11 +6,11 @@ var ReverseHandler = "SecretStringOperations.Reverse"
 var PremiumReverseHandler = "SecretStringOperations.FastReverse"
 
 type Response struct {
-	updatedWorld [][]uint8
+	UpdatedWorld [][]uint8
 }
 
 type Request struct {
-	world [][]uint8
-	p     gol.Params
-	c     gol.DistributorChannels
+	World [][]uint8
+	P     gol.Params
+	C     gol.DistributorChannels
 }
