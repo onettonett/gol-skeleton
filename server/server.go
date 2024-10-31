@@ -82,6 +82,12 @@ func nextState(world [][]uint8, p gol.Params, c gol.DistributorChannels) [][]uin
 	return toReturn
 }
 
+func doAllTurns(world [][]uint8, p gol.Params, c gol.DistributorChannels) {
+	for i := 0; i < p.Turns; i++ {
+		world = nextState(world, p, c)
+	}
+}
+
 type SecretStringOperations struct{}
 
 // this is like the Reverse method in SecretStrings

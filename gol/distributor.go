@@ -52,6 +52,10 @@ func distributor(p Params, c DistributorChannels) {
 	<-c.ioIdle
 
 	c.events <- StateChange{turn, Executing}
+
+	// Executing each turn should be in the server
+	// Client sends the world as an RPC call to the server
+	// Server sends back the world after the turns have been done
 	// TODO: Execute all turns of the Game of Life.
 	for i := 0; i < p.Turns; i++ {
 		world = nextState(world, p, c)
