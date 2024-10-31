@@ -21,7 +21,7 @@ func main() {
 		&params.Threads,
 		"t",
 		8,
-		"Specify the number of worker threads to use. Defaults to 8.")
+		"Specify the number of server threads to use. Defaults to 8.")
 
 	flag.IntVar(
 		&params.ImageWidth,

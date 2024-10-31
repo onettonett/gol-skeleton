@@ -54,7 +54,7 @@ type CellFlipped struct { // implements Event
 
 // `CellsFlipped` is an Event notifying the GUI about a change of state of many cells.
 // You can collect many flipped cells and send `CellsFlipped` at a time instead of sending `CellFlipped` for every flipped cell.
-// You can send many times of `CellsFlipped` event in a turn, i.e., each worker could send `CellsFlipped`.
+// You can send many times of `CellsFlipped` event in a turn, i.e., each server could send `CellsFlipped`.
 // **Please be careful not to send `CellFlipped` and `CellsFlipped` at the same time, as they may conflict.**
 // Choose one of them.
 type CellsFlipped struct { // implements Event

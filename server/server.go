@@ -10,6 +10,11 @@ import (
 	"uk.ac.bris.cs/gameoflife/stubs"
 )
 
+// distributor.go acts as the client
+// server file is on the server
+// go run server/server.go
+// pressed green button in distributor
+
 // Secret method that we can't let clients see
 func nextState(world [][]uint8, p gol.Params, c gol.DistributorChannels) [][]uint8 {
 
@@ -79,10 +84,10 @@ func nextState(world [][]uint8, p gol.Params, c gol.DistributorChannels) [][]uin
 
 type SecretStringOperations struct{}
 
-func (s *SecretStringOperations) Reverse(req stubs.Request, res *stubs.Response) (err error) {
+// this is like the Reverse method in SecretStrings
+func (s *SecretStringOperations) Update(req stubs.Request, res *stubs.Response) (err error) {
 	res.UpdatedWorld = nextState(req.World, req.P, req.C)
 	// func nextState(world [][]uint8, p gol.Params, c gol.DistributorChannels) [][]uint8
-	return
 }
 
 func main() {

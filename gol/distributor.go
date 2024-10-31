@@ -1,7 +1,11 @@
 package gol
 
+// acts as the client
 import (
+	"flag"
 	"fmt"
+	"net/rpc"
+	"uk.ac.bris.cs/gameoflife/stubs"
 	"uk.ac.bris.cs/gameoflife/util"
 )
 
@@ -148,4 +152,17 @@ func calculateAliveCells(world [][]byte) []util.Cell {
 		}
 	}
 	return alives
+}
+
+func main() {
+	// connect to RPC server and send a request
+	server := flag.String("server", "127.0.0.1:8030", "IP:port string to connect to as server")
+	flag.Parse()
+	fmt.Println("Server: ", *server)
+	client, _ := rpc.Dial("tcp", *server)
+	defer client.Close()
+	request := stubs.Request{World: world, P: p, C: c}
+	response := new(stubs.Response)
+	client.Call(stubs.ReverseHandler, request, response)
+	fmt.Println("Responded: ")
 }
