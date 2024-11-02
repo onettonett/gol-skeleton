@@ -2,16 +2,17 @@ package gol
 
 import (
 	"fmt"
+	"time"
 	"uk.ac.bris.cs/gameoflife/util"
 )
 
-type distributorChannels struct {
+type DistributorChannels struct {
 	events     chan<- Event
 	ioCommand  chan<- ioCommand
 	ioIdle     <-chan bool
 	ioFilename chan<- string
 	ioOutput   chan<- uint8
-	ioInput    <-chan uint8
+	IoInput    <-chan uint8
 }
 
 // distributor constructs a filename based on parameters
@@ -20,7 +21,7 @@ type distributorChannels struct {
 // finally, it sends the alive cells down this final turn complete event that's used by the testing suite
 
 // distributor divides the work between workers and interacts with other goroutines.
-func distributor(p Params, c distributorChannels) {
+func distributor(p Params, c DistributorChannels) {
 
 	// first thing is to get the image
 
@@ -29,104 +30,96 @@ func distributor(p Params, c distributorChannels) {
 	W := p.ImageWidth
 
 	turn := 0
-	world := make([][]uint8, H) // create a slice with 16 rows
+	world := make([][]uint8, H) // create a slice with rows equal to ImageHeight
 	for i := 0; i < H; i++ {
-		world[i] = make([]uint8, W) // initialise each row with 16 columns
+		world[i] = make([]uint8, W) // initialise each row with columns equal to ImageWidth
 	}
 	c.ioCommand <- ioInput
 
 	filename := fmt.Sprintf("%dx%d", p.ImageHeight, p.ImageWidth)
 	c.ioFilename <- filename
 
-	// fill in the 2d slice
+	// fill in the 2D slice
 	for y := 0; y < H; y++ {
 		for x := 0; x < W; x++ {
-			world[y][x] = <-c.ioInput
+			world[y][x] = <-c.IoInput
 		}
 	}
 	c.ioCommand <- ioCheckIdle
 	<-c.ioIdle
 
 	c.events <- StateChange{turn, Executing}
-	// TODO: Execute all turns of the Game of Life.
-	p.Threads
+
+	// Ticker to report alive cell counts every 2 seconds
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	// Channel to signal when all turns are complete
+	done := make(chan bool)
+
+	// Goroutine to report alive cells count every 2 seconds
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				alives := calculateAliveCells(world)
+				c.events <- AliveCellsCount{CompletedTurns: turn, CellsCount: len(alives)}
+			case <-done:
+				return
+			}
+		}
+	}()
+
+	// Execute all turns of the Game of Life
 	for i := 0; i < p.Turns; i++ {
 		world = nextState(world, p, c)
+		turn++
+		c.events <- TurnComplete{CompletedTurns: turn}
 	}
 
-	// TODO: Report the final state using FinalTurnCompleteEvent.
+	// Signal the reporting goroutine to stop
+	done <- true
+
+	// Report the final state using FinalTurnCompleteEvent
 	alives := calculateAliveCells(world)
 	c.events <- FinalTurnComplete{CompletedTurns: p.Turns, Alive: alives}
-	// send an event down an events channel
-	// must implement the events channel, FinalTurnComplete is an event so must implement the event interface
-	// Make sure that the Io has finished any output before exiting.
 
-	// if it's idle it'll return true so you can use it before reading input, for example
-	// to ensure output has saved before reading
+	// Ensure IO has finished any output before exiting
 	c.ioCommand <- ioCheckIdle
 	<-c.ioIdle
 
 	c.events <- StateChange{turn, Quitting}
 
-	// Close the channel to stop the SDL goroutine gracefully. Removing may cause deadlock.
+	// Close the channel to stop the SDL goroutine gracefully to avoid deadlock.
 	close(c.events)
 }
 
-func nextState(world [][]uint8, p Params, c distributorChannels) [][]uint8 {
+// nextState calculates the next state of the board
+func nextState(world [][]uint8, p Params, c DistributorChannels) [][]uint8 {
 
 	H := p.ImageHeight
-	W := p.ImageHeight
+	W := p.ImageWidth
 
-	// make toReturn 2d slice
-	toReturn := make([][]uint8, H) // create a slice with 16 rows
+	// Create the new world state
+	toReturn := make([][]uint8, H) // create a slice with rows equal to ImageHeight
 	for i := 0; i < H; i++ {
-		toReturn[i] = make([]uint8, W) // initialise each row with 16 columns
-	}
-	// fill in the 2d slice
-	for y := 0; y < H; y++ {
-		for x := 0; x < W; x++ {
-			toReturn[y][x] = <-c.ioInput
-		}
+		toReturn[i] = make([]uint8, W) // initialise each row with columns equal to ImageWidth
 	}
 
 	for y := 0; y < H; y++ {
 		for x := 0; x < W; x++ {
-			sum := 0
-			if world[y%H][(x-1+W)%W] != 0 {
-				sum += 1
-			}
-			if world[y%H][(x+1)%W] != 0 {
-				sum += 1
-			}
-			if world[(y+1)%H][x%W] != 0 {
-				sum += 1
-			}
-			if world[(y+1)%H][(x+1)%W] != 0 {
-				sum += 1
-			}
-			if world[(y+1)%H][(x-1+W)%W] != 0 {
-				sum += 1
-			}
-			if world[(y-1+H)%H][x%W] != 0 {
-				sum += 1
-			}
-			if world[(y-1+H)%H][(x+1)%W] != 0 {
-				sum += 1
-			}
-			if world[(y-1+H)%H][(x-1+W)%W] != 0 {
-				sum += 1
-			}
+			sum := countAliveNeighbours(world, x, y, W, H)
 
 			if world[y][x] == 255 {
-				// the cell was previously alive
+				// The cell was previously alive
 				if sum < 2 || sum > 3 {
 					toReturn[y][x] = 0
 				} else if sum == 2 || sum == 3 {
-					// keep the cell alive
+					// Keep the cell alive
 					toReturn[y][x] = 255
 				}
 			} else if world[y][x] == 0 {
-				// the cell was previously dead
+				// The cell was previously dead
 				if sum == 3 {
 					toReturn[y][x] = 255
 				} else {
@@ -138,34 +131,32 @@ func nextState(world [][]uint8, p Params, c distributorChannels) [][]uint8 {
 	return toReturn
 }
 
-// merge - nextState
-func parallelNextState(slice []uint8, p Params, c distributorChannels, max int) [][]uint8 {
-	if len(slice) > 1 {
-		if len(slice) <= max {
-			nextState(slice)
-		} else {
-			middle := len(slice) / 2
-			done := make(chan bool)
+// countAliveNeighbours calculates the number of alive neighbours for a given cell
+func countAliveNeighbours(world [][]uint8, x, y, width, height int) int {
+	sum := 0
+	directions := []struct{ dx, dy int }{
+		{-1, -1}, {-1, 0}, {-1, 1},
+		{0, -1},           {0, 1},
+		{1, -1}, {1, 0}, {1, 1},
+	}
 
-			go func() {
-				parallelNextState(slice[:middle], p, c, max)
-				done <- true
-			}()
-
-			parallelNextState(slice[middle:], p, c, max)
-			<-done
-			nextState(slice, p, c, middle)
+	for _, d := range directions {
+		nx, ny := (x+d.dx+width)%width, (y+d.dy+height)%height
+		if world[ny][nx] == 255 {
+			sum++
 		}
 	}
+
+	return sum
 }
 
-func calculateAliveCells(world [][]byte) []util.Cell {
+// calculateAliveCells returns a list of coordinates for cells that are alive
+func calculateAliveCells(world [][]uint8) []util.Cell {
 	alives := make([]util.Cell, 0)
-	for y := 0; y < 16; y++ {
-		for x := 0; x < 16; x++ {
+	for y := 0; y < len(world); y++ {
+		for x := 0; x < len(world[y]); x++ {
 			if world[y][x] == 255 {
-				newCell := util.Cell{x, y}
-				alives = append(alives, newCell)
+				alives = append(alives, util.Cell{X: x, Y: y})
 			}
 		}
 	}
