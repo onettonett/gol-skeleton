@@ -24,6 +24,7 @@ func Run(p Params, events chan<- Event, keyPresses <-chan rune) {
 		filename: ioFilename,
 		output:   ioOutput,
 		input:    ioInput,
+		keyPresses: keyPresses,
 	}
 	go startIo(p, ioChannels)
 
@@ -34,6 +35,7 @@ func Run(p Params, events chan<- Event, keyPresses <-chan rune) {
 		ioFilename: ioFilename,
 		ioOutput:   ioOutput,
 		IoInput:    ioInput,
+		keyPresses: keyPresses,
 	}
 	distributor(p, distributorChannels)
 
