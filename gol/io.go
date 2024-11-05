@@ -20,6 +20,7 @@ type ioChannels struct {
 	filename <-chan string
 	output   <-chan uint8
 	input    chan<- uint8
+	keyPresses <-chan rune
 }
 
 // ioState is the internal ioState of the io goroutine.
