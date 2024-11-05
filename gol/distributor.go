@@ -95,12 +95,16 @@ func distributor(p Params, c DistributorChannels) {
 	// Channel to signal when all turns are complete
 	done := make(chan bool)
 
+	var completedTurns int
+	writeToFile := true
+
 	// Goroutine to report alive cells count every 2 seconds
 	go func() {
 		for {
 			select {
 			case <-ticker.C:
 				alives, turns := calculateAliveCellsNode()
+				completedTurns = turns
 				c.events <- AliveCellsCount{CompletedTurns: turns , CellsCount: alives}
 			case <-done:
 				return
@@ -109,6 +113,7 @@ func distributor(p Params, c DistributorChannels) {
 	}()
 
 	quit := make(chan bool)
+
     
     // Start goroutine to handle keypresses
     go func() {
@@ -121,20 +126,48 @@ func distributor(p Params, c DistributorChannels) {
 					saveBoardState(c, p)
                 case 'q':
                     // Send quit command to server
+					fmt.Println("Quitting")
                     client, err := getRPCClient()
                     if err == nil {
                         request := stubs.StateRequest{Command: "quit"}
                         response := new(stubs.StateResponse)
-                        client.Call("SecretStringOperations.HandleCommand", request, response)
-                    }
+                        client.Call("SecretStringOperations.State", request, response)
+                    }else{
+						fmt.Println("Failed to connect to server")
+						fmt.Printf("Error stack trace:\n%+v\n", err)
+					}
+				case 'k':
+					fmt.Println("Killing server")
+					client, err := getRPCClient()
+					if err == nil {
+						saveBoardState(c, p)
+						writeToFile = false
+						request := stubs.StateRequest{Command: "kill"}
+						response := new(stubs.StateResponse)
+						client.Call("SecretStringOperations.State", request, response)
+						fmt.Printf("Server killed, world state saved\n")
+						quit <- true
+						done <- true
+						return
+					}
                 case 'p':
                     // Send pause/resume command to server
                     client, err := getRPCClient()
+					fmt.Println("Pausing")
                     if err == nil {
                         request := stubs.StateRequest{Command: "pause"}
                         response := new(stubs.StateResponse)
-                        client.Call("SecretStringOperations.HandleCommand", request, response)
-                    }
+                        client.Call("SecretStringOperations.State", request, response)
+						if response.Message == "Continuing"{
+							fmt.Println("Continuing")
+						}else{
+							fmt.Printf("Turns: %d\n", response.Turns)
+							completedTurns = response.Turns
+						}
+                    }else{
+						fmt.Println("Failed to connect to server")
+						fmt.Printf("Error stack trace:\n%+v\n", err)
+					}
                 }
             case <-quit:
                 return
@@ -150,18 +183,21 @@ func distributor(p Params, c DistributorChannels) {
 
 	// TODO: Report the final state using FinalTurnCompleteEvent.
 	alives := calculateAliveCells(world)
-	c.events <- FinalTurnComplete{CompletedTurns: p.Turns, Alive: alives}
+	c.events <- FinalTurnComplete{CompletedTurns: completedTurns, Alive: alives}
 	// send an event down an events channel
 	// must implement the events channel, FinalTurnComplete is an event so must implement the event interface
 	// Make sure that the Io has finished any output before exiting.
 
-	//output the state of the board after all turns have been completed as a PGM image
-	c.ioCommand <- ioOutput
-	filename = fmt.Sprintf("%dx%dx%d", p.ImageHeight, p.ImageWidth, p.Turns)
-	c.ioFilename <- filename
-	for y := 0; y < H; y++ {
-		for x := 0; x < W; x++ {
-			c.ioOutput <- world[y][x]
+	if(writeToFile){
+
+		//output the state of the board after all turns have been completed as a PGM image
+		c.ioCommand <- ioOutput
+		filename = fmt.Sprintf("%dx%dx%d", p.ImageHeight, p.ImageWidth, completedTurns)
+		c.ioFilename <- filename
+		for y := 0; y < H; y++ {
+			for x := 0; x < W; x++ {
+				c.ioOutput <- world[y][x]
+			}
 		}
 	}
 
@@ -257,9 +293,7 @@ func nextStateNode(world [][]uint8, p Params) [][]uint8 {
 	// Make RPC call and get response
 	err = client.Call("SecretStringOperations.Start", request, response)
 	if err != nil {
-		// If RPC fails, fall back to local processing
-		fmt.Printf("RPC failed: %v\n", err)
-		fmt.Printf("Error stack trace:\n%+v\n", err)
+		fmt.Printf("Server connection closed\n")
 		return nil
 	}
 

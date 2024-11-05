@@ -30,4 +30,5 @@ type StateRequest struct {
 type StateResponse struct {
 	World [][]uint8
 	Turns int
+	Message string
 }

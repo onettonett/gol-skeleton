@@ -9,12 +9,16 @@ import (
 	"uk.ac.bris.cs/gameoflife/stubs"
 	"uk.ac.bris.cs/gameoflife/util"
 	"fmt"
+	"os"
 )
 
 // distributor.go acts as the client
 // server file is on the server
 // go run server/server.go
 // pressed green button in distributor
+
+var listener net.Listener
+
 
 // Secret method that we can't let clients see
 func nextState(world [][]uint8, turns int, threads int, imageWidth int, imageHeight int) [][]uint8 {
@@ -79,9 +83,14 @@ func nextState(world [][]uint8, turns int, threads int, imageWidth int, imageHei
 	return toReturn
 }
 
-func doAllTurns(world [][]uint8, turns int, threads int, imageWidth int, imageHeight int, aliveCellsChan chan chan GameState, worldStateChan chan chan WorldState) [][]uint8 {
+func doAllTurns(world [][]uint8, turns int, threads int, imageWidth int, imageHeight int, aliveCellsChan chan chan GameState, worldStateChan chan chan WorldState, stopChannel chan bool, pauseChannel chan bool) [][]uint8 {
 	for t := 0; t < turns; t++ {
         select {
+		case shouldPause := <-pauseChannel:
+			if shouldPause {
+				fmt.Printf("Waiting for unpause\n")
+				<-pauseChannel
+			}
         case responseChan := <-aliveCellsChan:
             // When we receive a request for the alive cells count,
             // calculate and send it through the response channel
@@ -99,6 +108,9 @@ func doAllTurns(world [][]uint8, turns int, threads int, imageWidth int, imageHe
                 CurrentTurn: t,
             }
             responseChan <- state
+		case <-stopChannel:
+			fmt.Printf("Stopping game\n")
+			return world
         default:
             // Continue with normal game processing
 			world = nextState(world, turns, threads, imageWidth, imageHeight)
@@ -111,6 +123,9 @@ func doAllTurns(world [][]uint8, turns int, threads int, imageWidth int, imageHe
 type SecretStringOperations struct{
 	aliveCellsChannel chan chan GameState
 	worldStateChannel chan chan WorldState
+	stopChannel chan bool
+	pauseChannel chan bool
+	isPaused bool
 }
 
 type GameState struct {
@@ -128,8 +143,10 @@ func (s *SecretStringOperations) Start(req stubs.Request, res *stubs.Response) (
 	fmt.Printf("Received request: %v\n", req)
 	s.aliveCellsChannel = make(chan chan GameState)
 	s.worldStateChannel = make(chan chan WorldState)
-	res.UpdatedWorld = doAllTurns(req.World, req.Turns, req.Threads, req.ImageWidth, req.ImageHeight, s.aliveCellsChannel, s.worldStateChannel)
-	// func nextState(world [][]uint8, p gol.Params, c gol.DistributorChannels) [][]uint8
+	s.stopChannel = make(chan bool)
+	s.pauseChannel = make(chan bool)
+	s.isPaused = false
+	res.UpdatedWorld = doAllTurns(req.World, req.Turns, req.Threads, req.ImageWidth, req.ImageHeight, s.aliveCellsChannel, s.worldStateChannel, s.stopChannel, s.pauseChannel)
 	return nil
 }
 
@@ -163,9 +180,44 @@ func (s *SecretStringOperations) State(req stubs.StateRequest, res *stubs.StateR
 		case "quit":
 			// TODO: Implement quit functionality 
 			fmt.Println("Quit command received")
+			s.stopChannel <- true
 		case "pause":
-			// TODO: Implement pause functionality
-			fmt.Println("Pause command received") 
+			fmt.Println("Pause command received")
+			s.isPaused = !s.isPaused
+			s.pauseChannel <- s.isPaused
+			
+			// Only request world state after pause is acknowledged
+			if s.isPaused {
+				// Give time for the pause to be processed
+				time.Sleep(100 * time.Millisecond)
+				
+				worldStateChannel := make(chan WorldState)
+				s.worldStateChannel <- worldStateChannel
+				
+				select {
+				case worldState := <-worldStateChannel:
+					res.Turns = worldState.CurrentTurn
+					fmt.Printf("Is paused")
+				case <-time.After(1 * time.Second):
+					fmt.Printf("Timeout waiting for world state")
+				}
+			} else {
+				res.Message = "Continuing"
+				fmt.Printf("Is not paused")
+			}
+		case "kill":
+			fmt.Println("Kill command received")
+			fmt.Println("Shutting down server...")
+			// Close the listener to stop accepting new connections
+			if listener != nil {
+				listener.Close()
+			}
+
+			// Signal any running games to stop
+			s.stopChannel <- true
+			// Give a small delay for cleanup
+			//time.Sleep(100 * time.Millisecond)
+			defer os.Exit(0)
 		default:
 			fmt.Printf("Unknown command: %s\n", req.Command)
 	}
@@ -190,7 +242,12 @@ func main() {
 	flag.Parse()
 	rand.Seed(time.Now().UnixNano())
 	rpc.Register(&SecretStringOperations{})
-	listener, _ := net.Listen("tcp", "localhost:8030")
+	var err error
+    listener, err = net.Listen("tcp", "localhost:8030")
+    if err != nil {
+        fmt.Printf("Error starting server: %v\n", err)
+        return
+    }
 	defer listener.Close()
 	fmt.Printf("Server is listening on port %s...\n", *pAddr)
 	rpc.Accept(listener)
