@@ -16,7 +16,6 @@ type DistributorChannels struct {
 	keyPresses <-chan rune
 }
 
-// workerData represents a section of the world for a worker to process
 type workerData struct {
     startY, endY int
     world        [][]uint8
@@ -26,32 +25,28 @@ type workerData struct {
 	c 			 DistributorChannels
 }
 
-// distributor constructs a filename based on parameters
-// distributor sends the filename to the IO goroutine, which sends back an image byte-by-byte
-// the distributor evolves the gol by an amount dictated by parameter
-// finally, it sends the alive cells down this final turn complete event that's used by the testing suite
 
-// distributor divides the work between workers and interacts with other goroutines.
+// distributor handles the main game logic and communication between components
 func distributor(p Params, c DistributorChannels) {
 	isPaused := false
 
-	// first thing is to get the image
-
-	// TODO: Create a 2D slice to store the world.
 	H := p.ImageHeight
 	W := p.ImageWidth
 
+	// Initialize turn counter and create the world grid
 	turn := 0
-	world := make([][]uint8, H) // create a slice with rows equal to ImageHeight
+	world := make([][]uint8, H)
 	for i := 0; i < H; i++ {
-		world[i] = make([]uint8, W) // initialise each row with columns equal to ImageWidth
+		world[i] = make([]uint8, W)
 	}
+	
+	// Request input from IO
 	c.ioCommand <- ioInput
 
 	filename := fmt.Sprintf("%dx%d", p.ImageHeight, p.ImageWidth)
 	c.ioFilename <- filename
 
-	// fill in the 2D slice
+	// Read the initial board state from IO
 	for y := 0; y < H; y++ {
 		for x := 0; x < W; x++ {
 			val := <-c.IoInput
@@ -61,19 +56,19 @@ func distributor(p Params, c DistributorChannels) {
 			world[y][x] = val
 		}
 	}
+	
+	// Wait for IO to finish
 	c.ioCommand <- ioCheckIdle
 	<-c.ioIdle
 
 	c.events <- StateChange{turn, Executing}
 
-	// Ticker to report alive cell counts every 2 seconds
+	// Set up periodic reporting of alive cells
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 
-	// Channel to signal when all turns are complete
 	done := make(chan bool)
 
-	// Goroutine to report alive cells count every 2 seconds
 	go func() {
 		for {
 			select {
@@ -86,7 +81,7 @@ func distributor(p Params, c DistributorChannels) {
 		}
 	}()
 
-	// Execute all turns of the Game of Life
+	// Main game loop
 	for i := 0; i < p.Turns; i++ {
 		nextWorld := nextState(world, p, c, turn)
 		
@@ -95,29 +90,29 @@ func distributor(p Params, c DistributorChannels) {
 		c.events <- TurnComplete{CompletedTurns: turn}
 		turn++
 
-
+		// Handle keyboard input
 		select {
 		case key := <-c.keyPresses:
 			switch key {
-				case 's':
+				case 's': // Save current state
 					saveBoardState(world, c, p, turn)
-				case 'q':
+				case 'q': // Quit the game
 					terminate(world, c, p, turn)
 					return
-				case 'p':
+				case 'p': // Pause/unpause the game
 					isPaused = !isPaused
 					if isPaused {
 						c.events <- StateChange{turn, Paused}
-						// Enter pause loop
+						// Handle input while paused
 						for isPaused {
 							key := <-c.keyPresses
 							switch key {
-							case 'p':
+							case 'p': // Unpause
 								isPaused = false
 								c.events <- StateChange{turn, Executing}
-							case 's':
+							case 's': // Save while paused
 								saveBoardState(world, c, p, turn)
-							case 'q':
+							case 'q': // Quit while paused
 								terminate(world, c, p, turn)
 								return
 							}
@@ -128,8 +123,7 @@ func distributor(p Params, c DistributorChannels) {
 			}
 		
 		default:
-			// Non-blocking select
-	}
+		}
 
 	}
 
@@ -138,10 +132,9 @@ func distributor(p Params, c DistributorChannels) {
 
 	// Report the final state using FinalTurnCompleteEvent
 	alives := calculateAliveCells(world)
-	//c.events <- TurnComplete{CompletedTurns: turn}
 	c.events <- FinalTurnComplete{CompletedTurns: p.Turns, Alive: alives}
 	
-	//output the state of the board after all turns have been completed as a PGM image
+	// Output the final state as a PGM image
 	c.ioCommand <- ioOutput
 	filename = fmt.Sprintf("%dx%dx%d", p.ImageHeight, p.ImageWidth, p.Turns)
 	c.ioFilename <- filename
@@ -160,39 +153,50 @@ func distributor(p Params, c DistributorChannels) {
 	// Close the channel to stop the SDL goroutine gracefully to avoid deadlock.
 	close(c.events)
 }
-
 func terminate(world [][]uint8, c DistributorChannels, p Params, turn int){
-	// Send a FinalTurnComplete event
+	// Notify that the final turn is complete and send number of alive cells
 	c.events <- FinalTurnComplete{CompletedTurns: turn, Alive: calculateAliveCells(world)}
-	// Save the final state as a PGM image
+
+	// Output the final board state to a PGM file
 	saveBoardState(world, c, p, turn)
-	// Send a StateChange event
+
+	// Update the game state to quitting
 	c.events <- StateChange{turn, Quitting}
-	// Close the channel to stop the SDL goroutine gracefully to avoid deadlock.
+	
+	// Clean up by closing events channel to prevent deadlock
 	close(c.events)
 }
 
 func saveBoardState(world [][]uint8, c DistributorChannels, p Params, turn int) {
+	// Send command to start PGM output
 	c.ioCommand <- ioOutput
+	// Generate filename based on dimensions and current turn
 	filename := fmt.Sprintf("%dx%dx%d", p.ImageHeight, p.ImageWidth, turn)
 	c.ioFilename <- filename
 	
-	// Send the current world state
+	// Send the current world state cell by cell
 	for y := 0; y < p.ImageHeight; y++ {
 		for x := 0; x < p.ImageWidth; x++ {
 			c.ioOutput <- world[y][x]
 		}
 	}
 	
-	// Wait for IO to complete
+	// Wait for IO operations to complete by checking idle status
 	c.ioCommand <- ioCheckIdle
 	<-c.ioIdle
 	
-	// Send ImageOutputComplete event
+	// Notify that the image output is complete with turn number and filename
 	c.events <- ImageOutputComplete{turn, filename}
 }
 
-// worker processes its assigned section of the world
+// A worker processes a section of the Game of Life world grid in parallel
+// It applies the rules of Conway's Game of Life:
+// - Any live cell with fewer than 2 live neighbours dies (underpopulation)
+// - Any live cell with 2 or 3 live neighbours lives
+// - Any live cell with more than 3 live neighbours dies (overpopulation) 
+// - Any dead cell with exactly 3 live neighbours becomes alive (reproduction)
+// The function takes a workerData struct containing the section bounds and world state
+// and signals completion through the done channel
 func worker(data workerData, done chan<- bool) {
     for y := data.startY; y < data.endY; y++ {
         for x := 0; x < data.params.ImageWidth; x++ {
@@ -218,7 +222,9 @@ func worker(data workerData, done chan<- bool) {
     done <- true
 }
 
-// nextState calculates the next state of the board using worker threads
+// nextState calculates the next state of the Game of Life board by dividing work among multiple goroutines.
+// It takes the current world state, game parameters, communication channels, and current turn number.
+// Returns the new world state after applying the rules of Game of Life in parallel.
 func nextState(world [][]uint8, p Params, c DistributorChannels, turn int) [][]uint8 {
     // Create the new world state
     newWorld := make([][]uint8, p.ImageHeight)
@@ -268,7 +274,9 @@ func nextState(world [][]uint8, p Params, c DistributorChannels, turn int) [][]u
     return newWorld
 }
 
-// countAliveNeighbours calculates the number of alive neighbours for a given cell
+// countAliveNeighbours determines the number of alive neighbors for a cell at position (x,y).
+// It implements periodic boundary conditions by wrapping around the edges of the world.
+// Returns an integer count of alive neighbors (cells with value 255).
 func countAliveNeighbours(world [][]uint8, x, y, width, height int) int {
 	sum := 0
 	directions := []struct{ dx, dy int }{
@@ -287,7 +295,9 @@ func countAliveNeighbours(world [][]uint8, x, y, width, height int) int {
 	return sum
 }
 
-// calculateAliveCells returns a list of coordinates for cells that are alive
+// calculateAliveCells scans the entire world grid and creates a list of all living cells.
+// A cell is considered alive if its value is 255.
+// Returns a slice of Cell structs containing the coordinates of all living cells.
 func calculateAliveCells(world [][]uint8) []util.Cell {
 	alives := make([]util.Cell, 0)
 	for y := 0; y < len(world); y++ {
