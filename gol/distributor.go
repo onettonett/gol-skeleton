@@ -79,7 +79,7 @@ func distributor(p Params, c DistributorChannels) {
 			select {
 			case <-ticker.C:
 				alives := calculateAliveCells(world)
-				c.events <- AliveCellsCount{CompletedTurns: turn - 1, CellsCount: len(alives)}
+				c.events <- AliveCellsCount{CompletedTurns: turn, CellsCount: len(alives)}
 			case <-done:
 				return
 			}
